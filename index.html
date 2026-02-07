@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Truco P2P com PeerJS</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Truco P2P</h1>
+    <p style="text-align:center; color:#555; margin-bottom:16px;">Jogue Truco online com seus amigos, de forma simples e segura.<br>Escolha se quer criar uma sala ou entrar em uma já existente.</p>
+    <div class="section" id="host-section">
+      <button id="create-host">Criar Sala (Sou o anfitrião)</button>
+      <div id="host-id" class="peer-id" style="display:none;"></div>
+    </div>
+    <div class="section">
+      <label for="join-id">Entrar em sala:</label>
+      <input type="text" id="join-id" placeholder="Digite ou cole o Peer ID do anfitrião aqui" aria-label="Peer ID do anfitrião">
+      <button id="join-btn">Entrar como convidado</button>
+    </div>
+    <div class="section">
+      <div><strong>Status da conexão:</strong></div>
+      <div class="log" id="log" aria-live="polite"></div>
+    </div>
+    <footer style="text-align:center; color:#888; font-size:0.9em; margin-top:24px;">
+      <p>Precisa de ajuda? Compartilhe o Peer ID com seu amigo para jogar juntos.<br>Desenvolvido por você para diversão e aprendizado.</p>
+    </footer>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>
