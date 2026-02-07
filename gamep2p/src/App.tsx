@@ -18,10 +18,10 @@ export default function App() {
   const [log, setLog] = useState('');
   const [name, setName] = useState('');
   const [askName, setAskName] = useState(false);
-  // Usar refs sem tipagem para compatibilidade JS
+  const [players, setPlayers] = useState([]); // lista de nomes dos jogadores
+  const [playersCheck, setPlayersCheck] = useState(0); // trigger para forçar checagem
   const peerRef = useRef(null);
   const connRef = useRef(null);
-  // guestsRef armazena as conexões dos convidados (array de qualquer tipo)
   const guestsRef = useRef([]);
 
   const appendLog = (msg) => setLog(l => l + '\n' + msg);
@@ -49,27 +49,61 @@ export default function App() {
       peerRef.current = new Peer();
       appendLog('Criando sala...');
       guestsRef.current = [];
+      setPlayers([nome]);
       peerRef.current.on('open', (id) => {
         setRoomId(id);
         setPage('room');
         appendLog(`Sala criada! Compartilhe o Peer ID: ${id}`);
       });
       peerRef.current.on('connection', (connection) => {
-        // Corrigir push para array de conexões
         // @ts-ignore
         guestsRef.current.push(connection);
         appendLog('Jogador conectado!');
+        let playerName = null;
+        let pingTimeout = null;
         connection.on('data', (data) => {
-          appendLog(`Recebido do convidado: ${data}`);
-          // Propagar mensagem recebida para todos os outros convidados
-          // @ts-ignore
-          guestsRef.current.forEach(conn => {
-            if (conn !== connection && conn && conn.open) {
-              conn.send(data);
-            }
+          let parsed;
+          try { parsed = JSON.parse(data); } catch {}
+          if (parsed && parsed.type === 'join' && parsed.name) {
+            playerName = parsed.name;
+            setPlayers(prev => {
+              if (!prev.includes(parsed.name)) {
+                const updated = [...prev, parsed.name];
+                // @ts-ignore
+                guestsRef.current.forEach(conn => { if (conn && conn.open) conn.send(JSON.stringify({ type: 'players', players: updated })); });
+                return updated;
+              }
+              return prev;
+            });
+          } else if (parsed && parsed.type === 'players' && Array.isArray(parsed.players)) {
+            setPlayers(parsed.players);
+          } else if (parsed && parsed.type === 'ping') {
+            // Responde ao ping
+            connection.send(JSON.stringify({ type: 'pong' }));
+          } else if (parsed && parsed.type === 'pong') {
+            // Recebeu pong, limpa timeout
+            if (pingTimeout) clearTimeout(pingTimeout);
+          } else {
+            appendLog(`Recebido do convidado: ${data}`);
+            // Propaga mensagens normais
+            // @ts-ignore
+            guestsRef.current.forEach(conn => { if (conn !== connection && conn && conn.open) { conn.send(data); } });
+          }
+        });
+        connection.on('close', () => {
+          // Remove player da lista e avisa todos
+          setPlayers(prev => {
+            const updated = prev.filter(p => p !== playerName);
+            // @ts-ignore
+            guestsRef.current.forEach(conn => { if (conn && conn.open) conn.send(JSON.stringify({ type: 'players', players: updated })); });
+            // @ts-ignore
+            guestsRef.current.forEach(conn => { if (conn && conn.open) conn.send(`${playerName} saiu da sala.`); });
+            appendLog(`${playerName} saiu da sala.`);
+            return updated;
           });
         });
-        connection.send(`Bem-vindo à sala! Host: ${nome}`);
+        // Envia lista de players atual para novo convidado
+        connection.send(JSON.stringify({ type: 'players', players: [...players, nome] }));
       });
       peerRef.current.on('error', (err) => appendLog('Erro: ' + err));
     });
@@ -89,10 +123,25 @@ export default function App() {
           appendLog('Conectado ao host!');
           setRoomId(peerId);
           setPage('room');
-          connRef.current.send(`Olá, host! Meu nome é ${nome}`);
+          // Envia mensagem de join com nome
+          connRef.current.send(JSON.stringify({ type: 'join', name: nome }));
         });
         connRef.current.on('data', (data) => {
-          appendLog(`${data}`);
+          let parsed;
+          try { parsed = JSON.parse(data); } catch {}
+          if (parsed && parsed.type === 'players' && Array.isArray(parsed.players)) {
+            setPlayers(parsed.players);
+          } else if (typeof parsed === 'object' && parsed && parsed.type === 'ping') {
+            // Responde ao ping
+            connRef.current.send(JSON.stringify({ type: 'pong' }));
+          } else if (typeof parsed === 'object' && parsed && parsed.type === 'pong') {
+            // Recebeu pong, não faz nada
+          } else {
+            appendLog(`${data}`);
+          }
+        });
+        connRef.current.on('close', () => {
+          appendLog('Você foi desconectado do host.');
         });
         connRef.current.on('error', (err) => appendLog('Erro na conexão: ' + err));
       });
@@ -141,5 +190,45 @@ export default function App() {
   if (page === 'lobby') {
     return <Lobby onCreate={handleCreate} onJoin={handleJoin} />;
   }
-  return <Room roomId={roomId} onCopy={handleCopy} log={log} onSendMessage={handleSendMessage} name={name} />;
+  // Função para pingar todos os jogadores (host)
+  const pingPlayers = () => {
+    if (guestsRef.current.length > 0) {
+      guestsRef.current.forEach(conn => {
+        if (conn && conn.open) {
+          let ponged = false;
+          conn.send(JSON.stringify({ type: 'ping' }));
+          const timeout = setTimeout(() => {
+            if (!ponged) {
+              // Remove player da lista e avisa todos
+              let playerName = null;
+              // Tenta descobrir o nome pelo último players[]
+              // (não é 100% seguro, mas suficiente para demo)
+              setPlayers(prev => {
+                const toRemove = prev.find(p => !guestsRef.current.some(c => c && c.open));
+                if (toRemove) {
+                  const updated = prev.filter(p => p !== toRemove);
+                  guestsRef.current.forEach(c => { if (c && c.open) c.send(JSON.stringify({ type: 'players', players: updated })); });
+                  guestsRef.current.forEach(c => { if (c && c.open) c.send(`${toRemove} saiu da sala.`); });
+                  appendLog(`${toRemove} saiu da sala.`);
+                  return updated;
+                }
+                return prev;
+              });
+            }
+          }, 1500);
+          conn.on('data', (data) => {
+            let parsed;
+            try { parsed = JSON.parse(data); } catch {}
+            if (parsed && parsed.type === 'pong') {
+              ponged = true;
+              clearTimeout(timeout);
+            }
+          });
+        }
+      });
+    }
+    setPlayersCheck(v => v + 1); // força rerender
+  };
+
+  return <Room roomId={roomId} onCopy={handleCopy} log={log} onSendMessage={handleSendMessage} name={name} players={players} onPlayersOpen={pingPlayers} playersCheck={playersCheck} />;
 }

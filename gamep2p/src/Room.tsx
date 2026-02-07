@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 
-export default function Room({ roomId, onCopy, log, onSendMessage, name }) {
+export default function Room({ roomId, onCopy, log, onSendMessage, name, players = [], onPlayersOpen, playersCheck }) {
   const [showChat, setShowChat] = useState(false);
+  const [showPlayers, setShowPlayers] = useState(false);
   const [msg, setMsg] = useState('');
   const handleSend = (e) => {
     e.preventDefault();
@@ -10,6 +11,12 @@ export default function Room({ roomId, onCopy, log, onSendMessage, name }) {
       setMsg('');
     }
   };
+
+  // Quando abrir a lista de players, dispara ping
+  React.useEffect(() => {
+    if (showPlayers && onPlayersOpen) onPlayersOpen();
+    // eslint-disable-next-line
+  }, [showPlayers, playersCheck]);
 
   return (
     <div style={{ minHeight: '100vh', minWidth: '100vw', width: '100vw', height: '100vh', background: '#181818', display: 'flex', flexDirection: 'column' }}>
@@ -62,11 +69,29 @@ export default function Room({ roomId, onCopy, log, onSendMessage, name }) {
       }}>
         <span style={{ fontWeight: 'bold', fontSize: 16 }}>Menu</span>
         <div style={{ display: 'flex', gap: 16 }}>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#fff', fontWeight: 'bold' }} onClick={() => setShowPlayers(v => !v)}>
+            Players
+          </button>
           <button style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#fff', fontWeight: 'bold' }} onClick={() => setShowChat(v => !v)}>
             Chat
           </button>
         </div>
       </footer>
+      {showPlayers && (
+        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 56, zIndex: 400, display: 'flex', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', color: '#222', borderRadius: 8, boxShadow: '0 2px 8px #0002', padding: 20, minWidth: 260, maxWidth: 340, width: '90%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontWeight: 'bold', color: '#007bff', fontSize: 18 }}>Jogadores</span>
+              <button onClick={() => setShowPlayers(false)} style={{ background: 'none', border: 'none', color: '#007bff', fontWeight: 'bold', fontSize: 18, cursor: 'pointer' }}>X</button>
+            </div>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              {players.map((p, i) => (
+                <li key={i} style={{ padding: 6, borderBottom: '1px solid #eee', fontWeight: p === name ? 'bold' : 'normal', color: p === name ? '#007bff' : '#222' }}>{p}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
       {showChat && (
         <div style={{ position: 'fixed', left: 0, right: 0, bottom: 56, zIndex: 300, display: 'flex', justifyContent: 'center' }}>
           <form onSubmit={handleSend} style={{ background: '#fff', color: '#222', borderRadius: 8, boxShadow: '0 2px 8px #0002', padding: 12, minWidth: 320, display: 'flex', alignItems: 'center', gap: 8, maxWidth: 480, width: '90%' }}>
